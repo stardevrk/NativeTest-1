@@ -190,6 +190,8 @@ static CGSize const kPopoverContentSize = {480, 720};
 - (void)dismiss:(id)sender;
 - (void)finishPickingAssets:(id)sender;
 
+- (UIImage *)extractImageFromVideoAsset:(PHAsset *)asset;
+
 @end
 
 

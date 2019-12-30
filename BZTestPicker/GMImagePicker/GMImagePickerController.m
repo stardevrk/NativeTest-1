@@ -83,7 +83,7 @@
         _albumsController = [[GMAlbumsViewController alloc] init];
         
         
-        
+        //Upload target
         _toBeUploaded = [[NSURL alloc] init];
         
         // Filestack
@@ -107,6 +107,38 @@
         
     }
     return self;
+}
+
+- (UIImage *)extractImageFromVideoAsset:(PHAsset *)asset
+{
+    //Synchronous Image extracting
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    
+    PHVideoRequestOptions *option = [PHVideoRequestOptions new];
+    __block AVAsset *resultAsset;
+
+    [[PHImageManager defaultManager] requestAVAssetForVideo:asset options:option resultHandler:^(AVAsset * avasset, AVAudioMix * audioMix, NSDictionary * info) {
+        resultAsset = avasset;
+        dispatch_semaphore_signal(semaphore);
+    }];
+    
+    // Calculate a time for the snapshot - I'm using the half way mark.
+    CMTime duration = [resultAsset duration];
+    CMTime snapshot = CMTimeMake(duration.value / 2, duration.timescale);
+
+    // Create a generator and copy image at the time.
+    // I'm not capturing the actual time or an error.
+    AVAssetImageGenerator *generator =
+        [AVAssetImageGenerator assetImageGeneratorWithAsset:resultAsset];
+    CGImageRef imageRef = [generator copyCGImageAtTime:snapshot
+                                            actualTime:nil
+                                                 error:nil];
+
+    // Make a UIImage and release the CGImage.
+    UIImage *thumbnail = [UIImage imageWithCGImage:imageRef];
+    CGImageRelease(imageRef);
+    
+    return thumbnail;
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -212,6 +244,43 @@
         ];
     }
     
+}
+
+-(void) monitorUploadingAlert
+{
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    
+    PHVideoRequestOptions *option = [PHVideoRequestOptions new];
+    __block AVAsset *resultAsset;
+
+    [[PHImageManager defaultManager] requestAVAssetForVideo:asset options:option resultHandler:^(AVAsset * avasset, AVAudioMix * audioMix, NSDictionary * info) {
+        resultAsset = avasset;
+        dispatch_semaphore_signal(semaphore);
+    }];
+    
+    [self.client uploadURLUsing:self.toBeUploaded options:self.uploadOptions queue:dispatch_get_main_queue() uploadProgress:^(NSProgress * _Nonnull progress) {
+                    dispatch_semaphore_signal(semaphore);
+                
+       } completionHandler:^(FSNetworkJSONResponse * _Nullable response) {
+           NSString *message = self.confirmSingleSelectionPrompt ? self.confirmSingleSelectionPrompt : [NSString stringWithFormat:@"Uploading is Finished"];
+           
+           UIAlertController *alert = [UIAlertController alertControllerWithTitle:[NSString stringWithFormat: @"Finished!"]
+               message:message
+               preferredStyle:UIAlertControllerStyleAlert];
+           UIAlertAction *okAction = [UIAlertAction actionWithTitle:[NSString stringWithFormat:@"No"]
+               style:UIAlertActionStyleDefault handler:^(UIAlertAction * action){
+               // Ok action example
+           }];
+           UIAlertAction *otherAction = [UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Yes"]
+               style:UIAlertActionStyleDefault handler:^(UIAlertAction * action){
+               // Other action
+               
+           }];
+           [alert addAction:okAction];
+           [alert addAction:otherAction];
+           [self presentViewController:alert animated:YES completion:nil];
+       }
+    ];
 }
 
 
